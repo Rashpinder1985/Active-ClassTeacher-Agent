@@ -44,7 +44,7 @@ A **reviewer** step in code checks this; if you drift, output is rejected and re
 
 ## One-line system map
 
-`load_context` → `analytics_agent` (scores & charts, no LLM) → `summary_agent` → `homework_agent` (generate + validate) → `badge_agent` (top 5 quotes + PDF).
+`load_context` → `analytics_agent` (scores & charts, no LLM) → **`supervisor`** (LLM picks next allowed node) ⟷ `summary_agent` / `homework_agent` / `badge_agent` → `END`.
 
 ---
 

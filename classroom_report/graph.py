@@ -1,4 +1,4 @@
-"""LangGraph: load context → analytics → summary → homework."""
+"""LangGraph: load context → analytics → supervisor (LLM routing) → summary / homework / badge → loop."""
 
 from __future__ import annotations
 
@@ -59,6 +59,116 @@ class ClassroomState(TypedDict, total=False):
     summary_docx_bytes: bytes
     homework_docx_bytes: bytes
     errors: list[str]
+    router_next: NotRequired[str]
+    router_steps: NotRequired[int]
+    router_reason: NotRequired[str]
+
+
+ROUTER_MAX_STEPS = 12
+_ROUTER_ORDER = ("summary_agent", "homework_agent", "badge_agent")
+
+
+def _allowed_post_analytics_nodes(state: ClassroomState) -> list[str]:
+    """Which LLM nodes may run next (dependencies enforced in code, not only by the model)."""
+    if not state.get("ingest_ok"):
+        return []
+    want_s = state.get("want_summary", True)
+    want_h = state.get("want_homework", True)
+    want_b = state.get("want_badges", True)
+    lecture = (state.get("lecture_text") or "").strip()
+    has_s = bool((state.get("summary_text") or "").strip())
+    has_h = bool(state.get("homework_docx_bytes"))
+    has_b = bool(state.get("badge_pdf_bytes"))
+    top5 = state.get("top_performers_top5") or []
+    topic_ok = bool((state.get("summary_text") or state.get("lecture_text") or "").strip())
+
+    allowed: list[str] = []
+    if want_s and not has_s and lecture:
+        allowed.append("summary_agent")
+    if want_h and not has_h and topic_ok:
+        if not want_s or has_s:
+            allowed.append("homework_agent")
+    if want_b and not has_b and len(top5) > 0:
+        allowed.append("badge_agent")
+    return allowed
+
+
+def _fallback_router_choice(allowed: list[str]) -> str:
+    for k in _ROUTER_ORDER:
+        if k in allowed:
+            return k
+    return allowed[0]
+
+
+def _validate_router_choice(next_id: str | None, allowed: list[str]) -> str:
+    if not allowed:
+        return "end"
+    if next_id and next_id in allowed:
+        return next_id
+    return _fallback_router_choice(allowed)
+
+
+def _router_context_text(state: ClassroomState) -> str:
+    tc = state.get("tier_counts") or {}
+    summ = state.get("analytics_summary") or {}
+    score_stats = summ.get("score_stats") or {}
+    return (
+        f"want_summary={state.get('want_summary', True)}\n"
+        f"want_homework={state.get('want_homework', True)}\n"
+        f"want_badges={state.get('want_badges', True)}\n"
+        f"tier_counts={tc}\n"
+        f"students_n={score_stats.get('n', '?')}\n"
+        f"class_mean_pct={score_stats.get('mean', '?')}\n"
+        f"has_summary={bool((state.get('summary_text') or '').strip())}\n"
+        f"has_homework_doc={bool(state.get('homework_docx_bytes'))}\n"
+        f"has_badge_pdf={bool(state.get('badge_pdf_bytes'))}\n"
+        f"has_top5={len(state.get('top_performers_top5') or []) > 0}\n"
+        f"lecture_has_text={bool((state.get('lecture_text') or '').strip())}\n"
+        "Hint: prefer summary_agent before homework_agent when both are still needed."
+    )
+
+
+def _node_supervisor(state: ClassroomState) -> dict[str, Any]:
+    errs = list(state.get("errors") or [])
+    step = int(state.get("router_steps") or 0) + 1
+    if step > ROUTER_MAX_STEPS:
+        return {
+            "router_next": "end",
+            "router_steps": step,
+            "router_reason": "Router step cap reached",
+            "errors": errs + ["Supervisor: max steps exceeded; stopping."],
+        }
+
+    allowed = _allowed_post_analytics_nodes(state)
+    if not allowed:
+        return {
+            "router_next": "end",
+            "router_steps": step,
+            "router_reason": "No remaining pipeline steps",
+        }
+
+    client = OllamaClient(model=state.get("ollama_model") or "llama3.2")
+    extra = _extra_system(state)
+    ctx = _router_context_text(state)
+    try:
+        next_id, reason = client.route_next_post_analytics(
+            allowed_ids=allowed,
+            context_text=ctx,
+            extra_system=extra or None,
+        )
+        next_id = _validate_router_choice(next_id, allowed)
+    except Exception as e:
+        next_id = _validate_router_choice(None, allowed)
+        reason = f"fallback after error: {e}"
+
+    return {"router_next": next_id, "router_steps": step, "router_reason": reason}
+
+
+def _route_supervisor(state: ClassroomState) -> str:
+    n = (state.get("router_next") or "end").strip()
+    if n not in ("summary_agent", "homework_agent", "badge_agent", "end"):
+        return "end"
+    return n
 
 
 def _node_load_context(state: ClassroomState) -> dict[str, Any]:
@@ -139,7 +249,7 @@ def _node_analytics_agent(state: ClassroomState) -> dict[str, Any]:
 
 
 def _route_after_analytics(state: ClassroomState) -> str:
-    return "summary_agent" if state.get("ingest_ok") else END
+    return "supervisor" if state.get("ingest_ok") else END
 
 
 def _extra_system(state: ClassroomState) -> str:
@@ -235,15 +345,30 @@ def build_graph():
     g = StateGraph(ClassroomState)
     g.add_node("load_context", _node_load_context)
     g.add_node("analytics_agent", _node_analytics_agent)
+    g.add_node("supervisor", _node_supervisor)
     g.add_node("summary_agent", _node_summary_agent)
     g.add_node("homework_agent", _node_homework_agent)
     g.add_node("badge_agent", _node_badge_agent)
     g.set_entry_point("load_context")
     g.add_edge("load_context", "analytics_agent")
-    g.add_conditional_edges("analytics_agent", _route_after_analytics, {"summary_agent": "summary_agent", END: END})
-    g.add_edge("summary_agent", "homework_agent")
-    g.add_edge("homework_agent", "badge_agent")
-    g.add_edge("badge_agent", END)
+    g.add_conditional_edges(
+        "analytics_agent",
+        _route_after_analytics,
+        {"supervisor": "supervisor", END: END},
+    )
+    g.add_conditional_edges(
+        "supervisor",
+        _route_supervisor,
+        {
+            "summary_agent": "summary_agent",
+            "homework_agent": "homework_agent",
+            "badge_agent": "badge_agent",
+            "end": END,
+        },
+    )
+    g.add_edge("summary_agent", "supervisor")
+    g.add_edge("homework_agent", "supervisor")
+    g.add_edge("badge_agent", "supervisor")
     return g.compile()
 
 
@@ -286,6 +411,7 @@ def invoke_classroom(
         ],
         "want_badges": want_badges,
         "homework_max_attempts": max(1, int(homework_max_attempts)),
+        "router_steps": 0,
     }
     if score_band_edges is not None:
         init["score_band_edges"] = score_band_edges

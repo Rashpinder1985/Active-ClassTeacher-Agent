@@ -19,15 +19,13 @@
 ## Pipeline (order)
 
 ```
-load_context  →  analytics_agent  →  summary_agent  →  homework_agent  →  badge_agent  →  end
-     ↑                    ↑                  ↑                    ↑                  ↑
- agent.md +          no LLM           Ollama            generate +          quotes + PDF
- skills.md           charts            summary            validate             (top 5)
+load_context → analytics_agent → supervisor ⟷ summary_agent | homework_agent | badge_agent → END
+                      ↑ no LLM        ↑ LLM routes          ↑ each node returns to supervisor
 ```
 
-- **analytics_agent:** Scores, tiers, class distribution, top **10** chart, optional per-question engagement, top **5** rows for badges.
-- **homework_agent:** Builds homework → **reviewer** checks counts, order, quality → retries up to limit → then Word.
-- **badge_agent:** Optional; skipped if turned off or no data.
+- **analytics_agent:** Scores, tiers, charts, top **10**, optional engagement, top **5** for badges. **No LLM.**
+- **supervisor:** After analytics, a **local LLM** picks the **next** step from an **allowed** list (code enforces dependencies: e.g. summary before homework when both are on). Steps repeat until nothing is left or a **step cap** is hit.
+- **summary_agent / homework_agent / badge_agent:** Same behaviour as before; **homework** still runs the **reviewer** loop before Word.
 
 ---
 

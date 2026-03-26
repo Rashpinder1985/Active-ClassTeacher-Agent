@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import urllib.error
@@ -76,6 +77,57 @@ class OllamaClient:
 
     def available(self) -> tuple[bool, str]:
         return check_ollama_available(self.host)
+
+    def route_next_post_analytics(
+        self,
+        *,
+        allowed_ids: list[str],
+        context_text: str,
+        extra_system: Optional[str] = None,
+    ) -> tuple[str, str]:
+        """
+        LLM chooses the next graph node from a closed set. Returns (next_id, reason).
+        Caller must validate next_id ∈ allowed_ids (or use fallback).
+        """
+        if not allowed_ids:
+            return "end", "no allowed steps"
+        if len(allowed_ids) == 1:
+            return allowed_ids[0], "single option"
+
+        allowed_str = ", ".join(allowed_ids)
+        system = (
+            "You are a routing controller for a teacher reporting pipeline after quiz analytics. "
+            "Choose exactly ONE next step that best serves the teacher (e.g. summary before homework when both are needed). "
+            f"The field 'next' MUST be exactly one of: {allowed_str}. "
+            'Reply with a single JSON object only, no markdown: {"next":"<id>","reason":"<short reason>"}'
+        )
+        if extra_system and extra_system.strip():
+            system = system + "\n\n" + extra_system.strip()
+        prompt = (
+            "Context (facts about the run):\n"
+            f"{context_text}\n\n"
+            f"Allowed next nodes: {allowed_str}\n"
+            "Output JSON only."
+        )
+        raw = prompt_ollama(prompt, model=self.model, host=self.host, system=system)
+        next_id, reason = self._parse_router_json(raw, allowed_ids)
+        return next_id, reason
+
+    @staticmethod
+    def _parse_router_json(raw: str, allowed_ids: list[str]) -> tuple[str, str]:
+        text = (raw or "").strip()
+        if "{" in text and "}" in text:
+            start = text.index("{")
+            end = text.rindex("}") + 1
+            try:
+                data = json.loads(text[start:end])
+                nxt = str(data.get("next", "")).strip()
+                rsn = str(data.get("reason", "")).strip() or "model choice"
+                if nxt in allowed_ids:
+                    return nxt, rsn
+            except (json.JSONDecodeError, ValueError, KeyError):
+                pass
+        return allowed_ids[0], "fallback (parse or invalid next)"
 
     def generate_topic_summary(
         self,

@@ -35,6 +35,8 @@ class RunResponse(BaseModel):
     homework_docx_base64: Optional[str] = None
     homework_validation_note: Optional[str] = None
     badge_pdf_base64: Optional[str] = None
+    router_steps: Optional[int] = None
+    router_reason: Optional[str] = None
 
 
 @api_app.get("/health", response_model=HealthResponse)
@@ -122,4 +124,6 @@ async def graph_run(
         homework_docx_base64=hw_b64,
         homework_validation_note=state.get("homework_validation_note"),
         badge_pdf_base64=badge_b64,
+        router_steps=state.get("router_steps"),
+        router_reason=state.get("router_reason"),
     )

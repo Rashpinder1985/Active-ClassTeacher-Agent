@@ -2,7 +2,7 @@
 
 **Repository:** [github.com/Rashpinder1985/Active-ClassTeacher-Agent](https://github.com/Rashpinder1985/Active-ClassTeacher-Agent)
 
-Local-only tool for teachers: lecture slides (PPT/PDF) + poll responses (Excel) → topic summary (Word), poll analytics (charts), differentiated homework (with validation) via **Ollama**, and optional **top-performer badge PDFs**. The **LangGraph** pipeline: **load_context** → **analytics_agent** → **summary_agent** → **homework_agent** → **badge_agent** (see flowchart below). Stack: **FastAPI** (primary), **CLI**, optional **Streamlit**. Dependencies: **[uv](https://github.com/astral-sh/uv)** — [`pyproject.toml`](pyproject.toml) / [`uv.lock`](uv.lock) only (no `requirements.txt`).
+Local-only tool for teachers: lecture slides (PPT/PDF) + poll responses (Excel) → topic summary (Word), poll analytics (charts), differentiated homework (with validation) via **Ollama**, and optional **top-performer badge PDFs**. The **LangGraph** pipeline: **load_context** → **analytics_agent** → **supervisor** (LLM chooses the next allowed step) → **summary_agent** / **homework_agent** / **badge_agent** in a loop until done (see flowchart below). Stack: **FastAPI** (primary), **CLI**, optional **Streamlit**. Dependencies: **[uv](https://github.com/astral-sh/uv)** — [`pyproject.toml`](pyproject.toml) / [`uv.lock`](uv.lock) only (no `requirements.txt`).
 
 ### Multi-agent flowchart (Mermaid → PNG)
 

@@ -16,7 +16,7 @@ You are a **teacher** using **local Ollama**. Be clear, fair, and professional.
 
 **Homework:** Sections **Support → Core → Extension**. Per level: **MCQ → fill-in → subjective**; **exact** counts; **Answer key** last (**Support → Core → Extension**). No MCQ answers beside questions.
 
-**Pipeline:** analytics (no LLM) → summary → homework (validated) → badges (top 5).
+**Pipeline:** analytics (no LLM) → supervisor (LLM routes next) → summary / homework / badges in a loop until done.
 
 **Disclaimer:** Analytics = Excel/poll data only; teacher remains in charge.
 """
@@ -27,7 +27,7 @@ def default_skills_md() -> str:
 
 **Inputs:** Slides + Excel (id column + questions or marks). Optional Poll/Question/Quiz on slide title for summary. Caps: 50 MB / 10 MB.
 
-**Pipeline:** load_context → analytics (charts, tiers) → summary → homework (validate, retry) → badges (top 5 PDF).
+**Pipeline:** load_context → analytics → supervisor (LLM picks next) → summary / homework / badges → loop → end.
 
 **Analytics:** Custom score bands (0–100 edges) in Streamlit/API. Engagement chart only for poll-style sheets.
 

@@ -1,17 +1,22 @@
-%% Classroom Report — LangGraph pipeline (classroom_report/graph.py)
+%% Classroom Report — LangGraph (classroom_report/graph.py)
 flowchart TB
-    files["Slides + Excel uploads"]
-    LC["load_context — reads agent.md and skills.md"]
-    AN["analytics_agent — parse files, scores, tiers, charts, top 5"]
-    SM["summary_agent — Ollama topic summary, Word"]
-    HW["homework_agent — Ollama homework + reviewer validation, Word"]
-    BD["badge_agent — Ollama quotes, top 5 PDF badges"]
+    files["Slides + Excel"]
+    LC["load_context — agent.md + skills.md"]
+    AN["analytics_agent — scores, charts, tiers, top 5"]
+    SV["supervisor — LLM chooses next allowed step"]
+    SM["summary_agent"]
+    HW["homework_agent + reviewer"]
+    BD["badge_agent"]
     END(["END"])
 
     files --> LC
     LC --> AN
-    AN -->|ingest_ok| SM
-    AN -->|errors / missing inputs| END
-    SM --> HW
-    HW --> BD
-    BD --> END
+    AN -->|ingest_ok| SV
+    AN -->|fail| END
+    SV --> SM
+    SV --> HW
+    SV --> BD
+    SV --> END
+    SM --> SV
+    HW --> SV
+    BD --> SV
