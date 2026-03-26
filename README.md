@@ -23,9 +23,9 @@ Creates `.venv` and installs the `classroom-report` package in editable mode.
 
 | Interface | Command |
 |-----------|---------|
-| **API** | `uv run uvicorn classroom_report.api.main:app --reload --host 127.0.0.1 --port 8000` |
+| **API** | `uv run uvicorn app:api_app --reload --host 127.0.0.1 --port 8000` |
 | **CLI** | `uv run classroom slides.pptx responses.xlsx --out-dir ./out` — add `--no-summary` / `--no-homework` to skip steps; writes `.docx` and `charts/*.json` |
-| **Streamlit** | `uv run streamlit run app.py` — UI code: [`classroom_report/streamlit_app.py`](classroom_report/streamlit_app.py) |
+| **Streamlit** | `uv run streamlit run app.py` — UI is `run_streamlit()` in the same file |
 
 **API:** `GET /health` — status + Ollama. `POST /graph/run` (same as `/run`, `/graph/invoke`) — multipart: `slides`, `responses`; optional form fields `answer_key`, `ollama_model`, `want_summary`, `want_homework`, `anonymize`, `homework_levels_json`, `question_specs_json`. Response: charts (Plotly JSON), `ranked_preview`, `tier_counts`, optional texts, base64 `.docx` when generated.
 
@@ -33,8 +33,7 @@ Creates `.venv` and installs the `classroom-report` package in editable mode.
 
 | Path | Purpose |
 |------|---------|
-| [`classroom_report/`](classroom_report/) | Package: parsers, analytics, llm, reports, pipeline, `agent` (LangGraph), `api` (FastAPI), `streamlit_app.py` |
-| [`app.py`](app.py), [`cli.py`](cli.py) | Streamlit shim; CLI entry |
+| [`app.py`](app.py) | **Single module:** config, parsers, analytics, pipeline, Ollama client, Word reports, LangGraph agent, FastAPI (`api_app`), CLI (`cli_main`), Streamlit (`run_streamlit`) |
 | [`agent.md`](agent.md), [`skills.md`](skills.md) | Agent memory + workflow text (injected into Ollama context); created with defaults if missing |
 
 ## File formats

@@ -25,11 +25,7 @@ dependencies = [
 ]
 
 [project.scripts]
-classroom = "cli:main"
+classroom = "app:cli_main"
 
 [tool.setuptools]
-py-modules = ["app", "cli"]
-
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["classroom_report*"]
+py-modules = ["app"]

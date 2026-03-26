@@ -127,7 +127,7 @@ def build_tutorial():
     add_para(doc, "Prompt to use:")
     add_prompt(doc, "Prompt:", (
         "Add .gitignore (venv, .venv, __pycache__, .env, .DS_Store). In README: prerequisites (Python 3.10+, uv, Ollama), install "
-        "steps (`uv sync`, `uv run streamlit run app.py` or API via `uv run uvicorn classroom_report.api.main:app`), supported Excel formats (Selected/Correct "
+        "steps (`uv sync`, `uv run streamlit run app.py` or API via `uv run uvicorn app:api_app`), supported Excel formats (Selected/Correct "
         "and wide), guardrails (local only, no PII in prompts, file limits, disclaimer). Optionally add templates/ with example "
         "poll_responses_example.xlsx (Student Name, Q1–Q4, 1/0) and lecture_example.pptx with a 'Poll' slide."
     ))
@@ -135,7 +135,7 @@ def build_tutorial():
 
     # Final
     add_heading(doc, "Final check", level=1)
-    add_para(doc, "Run the app: `uv run streamlit run app.py` (or the FastAPI server with `uv run uvicorn classroom_report.api.main:app`). "
+    add_para(doc, "Run the app: `uv run streamlit run app.py` (or the FastAPI server with `uv run uvicorn app:api_app`). "
                   "Upload the example PPT and Excel from templates/ if present, open Analytics "
                   "(confirm top-5 and engagement charts), then Reports. Generate summary and homework; download the "
                   ".docx files. Ensure Ollama is running (ollama pull llama3.2) for summary and homework generation.")
