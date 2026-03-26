@@ -86,10 +86,10 @@ def build_tutorial():
     add_para(doc, "Prompt to use:")
     add_prompt(doc, "Prompt:", (
         "In analytics/: (1) scoring.py: compute_scores(df, question_columns) = per-student score (correct/answered), "
-        "assign_tiers(scores_df) using config tier percentages, get_top_n(ranked_df, n=5). All deterministic. "
-        "(2) charts.py: chart_top5(top5_df, anonymize) and chart_engagement(responses_df, question_columns) using "
+        "assign_tiers(scores_df) using config tier percentages, get_top_n(ranked_df, n). All deterministic. "
+        "(2) charts.py: chart_top_performers(top_df, n, anonymize) and chart_engagement(responses_df, question_columns) using "
         "Plotly. (3) Wire app.py Upload to persist file bytes in session_state so Analytics/Reports still have files. "
-        "On Analytics page: call parsers and scoring, show top-5 bar chart and engagement chart, tier counts, and "
+        "On Analytics page: call parsers and scoring, show top-10 bar chart and engagement chart, tier counts, and "
         "ranked table. Use helpers _get_slide_file() and _get_excel_file() that fall back to persisted bytes."
     ))
     doc.add_paragraph()
@@ -137,7 +137,7 @@ def build_tutorial():
     add_heading(doc, "Final check", level=1)
     add_para(doc, "Run the app: `uv run streamlit run app.py` (or the FastAPI server with `uv run uvicorn app:api_app`). "
                   "Upload the example PPT and Excel from templates/ if present, open Analytics "
-                  "(confirm top-5 and engagement charts), then Reports. Generate summary and homework; download the "
+                  "(confirm top-10 and engagement charts), then Reports. Generate summary and homework; download the "
                   ".docx files. Ensure Ollama is running (ollama pull llama3.2) for summary and homework generation.")
     doc.add_paragraph()
 

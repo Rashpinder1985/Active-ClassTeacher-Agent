@@ -9,6 +9,7 @@ description = "Classroom report analytics with LangGraph agent API and optional 
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "watchdog>=3.0.0",
     "streamlit>=1.28.0",
     "ollama>=0.3.0",
     "python-pptx>=0.6.21",
@@ -22,10 +23,15 @@ dependencies = [
     "langgraph>=0.2.0",
     "langchain-core>=0.3.0",
     "python-multipart>=0.0.9",
+    "reportlab>=4.0.0",
 ]
 
 [project.scripts]
 classroom = "app:cli_main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["classroom_report*"]
 
 [tool.setuptools]
 py-modules = ["app"]
