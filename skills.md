@@ -23,9 +23,9 @@ load_context → analytics_agent → supervisor ⟷ summary_agent | homework_age
                       ↑ no LLM        ↑ LLM routes          ↑ each node returns to supervisor
 ```
 
-- **analytics_agent:** Scores, tiers, charts, top **10**, optional engagement, top **5** for badges. **No LLM.**
-- **supervisor:** After analytics, a **local LLM** picks the **next** step from an **allowed** list (code enforces dependencies: e.g. summary before homework when both are on). Steps repeat until nothing is left or a **step cap** is hit.
-- **summary_agent / homework_agent / badge_agent:** Same behaviour as before; **homework** still runs the **reviewer** loop before Word.
+- **analytics_agent:** Scores, tiers, charts, top **10**, optional engagement, top **5** for badges. **No LLM.** Uses optional **`score_band_edges` / `score_band_labels`** from invoke when provided.
+- **supervisor:** After analytics, a **local LLM** picks the **next** step from an **allowed** list (code enforces dependencies: e.g. summary before homework when both are on). Steps repeat until nothing is left or a **step cap** is hit. Exposes **`router_steps`**, **`router_reason`** on the returned state.
+- **summary_agent / homework_agent / badge_agent:** Same behaviour as before; **homework** still runs the **reviewer** loop before Word. Respects **`want_summary` / `want_homework` / `want_badges`**.
 
 ---
 
@@ -33,7 +33,7 @@ load_context → analytics_agent → supervisor ⟷ summary_agent | homework_age
 
 - **Tiers:** Default split **20% / 60% / 20%** → labels **Extension / Core / Support**.
 - **Charts:** Score distribution (histogram), summary stats, top 10, engagement chart only for **poll-style** sheets.
-- **Custom bins:** In **Streamlit → Analytics**, set band **edges** (comma-separated, **0 … 100**). Optional **labels**. Same via API/CLI as JSON arrays.
+- **Custom bins:** In **Streamlit → Analytics** or **Reports** (full pipeline section), set band **edges** (comma-separated, **0 … 100**). Optional **labels**. Same keys feed **`invoke_classroom`** as **`score_band_edges` / `score_band_labels`** (API/CLI JSON arrays).
 
 ---
 
@@ -53,11 +53,11 @@ load_context → analytics_agent → supervisor ⟷ summary_agent | homework_age
 
 1. **Upload** — slides + Excel.  
 2. **Analytics** — metrics, charts, optional **custom score bands**.  
-3. **Reports** — summary, homework, badges.  
+3. **Reports** — **Run full report pipeline** (`invoke_classroom`): human-in-the-loop **bands**, **`want_*` toggles**, **homework levels** and **question counts**, then downloads plus optional **Supervisor (router)** log (`router_steps`, `router_reason`, errors). Or generate **summary**, **homework**, and **badges** step-by-step with the same homework controls.
 
 **Sidebar:** Ollama model, anonymize, **homework validation retries**.
 
-**CLI / API:** Same pipeline; knobs include score bands, `want_badges`, `homework_max_attempts`, `homework_levels_json` (normalized to **Support → Core → Extension**).
+**CLI / API:** Same graph via **`invoke_classroom`**; knobs include **`want_summary` / `want_homework` / `want_badges`**, score bands, `homework_max_attempts`, `homework_levels` / `question_specs` (normalized levels **Support → Core → Extension**).
 
 ---
 

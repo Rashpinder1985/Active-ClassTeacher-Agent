@@ -33,6 +33,8 @@ When generating differentiated homework:
 
 A **reviewer** step in code checks this; if you drift, output is rejected and regenerated—save time by getting it right the first time.
 
+*Prompt injection:* The same rules are embedded as **`HOMEWORK_LAYOUT_AGENT_RULES`** in `classroom_report/ollama.py` so every homework generation (including the LangGraph full pipeline) sees them **before** the full `agent.md` + `skills.md` context. Edit both places together if you change this section.
+
 ---
 
 ## Tiers vs homework headings
@@ -45,6 +47,23 @@ A **reviewer** step in code checks this; if you drift, output is rejected and re
 ## One-line system map
 
 `load_context` → `analytics_agent` (scores & charts, no LLM) → **`supervisor`** (LLM picks next allowed node) ⟷ `summary_agent` / `homework_agent` / `badge_agent` → `END`.
+
+If **ingest fails** (missing bytes, parse error, size limits), `analytics_agent` routes straight to **`END`**—the supervisor is not entered.
+
+---
+
+## Pipeline entry (`invoke_classroom`)
+
+The graph is compiled in `classroom_report/graph.py` and run via **`invoke_classroom(...)`** (FastAPI, CLI, or **Streamlit → Reports → Run full report pipeline**). The teacher can steer behaviour before the run:
+
+| Input | Role |
+|--------|------|
+| **`want_summary` / `want_homework` / `want_badges`** | Which outputs to attempt; the supervisor only schedules agents that are still needed and allowed. |
+| **`score_band_edges` / `score_band_labels`** | Optional custom histogram / tier bins for `run_analytics` (same rules as Analytics UI: edges **0–100**). |
+| **`homework_levels`**, **`question_specs`**, **`homework_max_attempts`** | Homework structure and validation retries. |
+| **`anonymize`**, **`answer_key`** | Names in outputs and Excel scoring. |
+
+State also records **`router_steps`**, **`router_reason`**, and **`errors`** for debugging (e.g. Streamlit expander after a full run).
 
 ---
 

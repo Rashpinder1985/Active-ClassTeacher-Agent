@@ -27,6 +27,7 @@ from classroom_report.config import (
     TOP_PERFORMER_CHART_N,
 )
 from classroom_report.excel import find_student_name_column
+from classroom_report.graph import invoke_classroom
 from classroom_report.loaders import combine_agent_skills, load_agent_md, load_skills_md
 from classroom_report.ollama import OllamaClient
 from classroom_report.reports import build_homework_docx, build_summary_docx
@@ -105,6 +106,16 @@ def run_streamlit() -> None:
         labels = parse_optional_band_labels_string(ls_raw)
         labels_arg: list[str] | None = labels if labels else None
         return edges, labels_arg
+
+    def _build_question_specs_from_session() -> list[dict]:
+        specs: list[dict] = []
+        if st.session_state.get("hw_include_mcq", True):
+            specs.append({"type": "MCQ", "count": int(st.session_state.get("hw_num_mcq", 2))})
+        if st.session_state.get("hw_include_fib", True):
+            specs.append({"type": "Fill in the blanks", "count": int(st.session_state.get("hw_num_fib", 2))})
+        if st.session_state.get("hw_include_subj", True):
+            specs.append({"type": "Subjective questions", "count": int(st.session_state.get("hw_num_subj", 1))})
+        return specs
 
     def _ensure_analytics_data():
         if st.session_state.get("_analytics_ready"):
@@ -345,37 +356,30 @@ def run_streamlit() -> None:
             poll_questions_text = st.session_state.get("poll_questions_text", "")
             tier_counts = st.session_state.get("tier_counts", {})
 
-            st.subheader("Topic summary (Word)")
-            if st.button("Generate summary report"):
-                if not ok:
-                    st.error("Start Ollama and pull a model first.")
-                elif not lecture_text:
-                    st.error("No text could be extracted from the slides.")
-                else:
-                    with st.spinner("Generating summary..."):
-                        try:
-                            summary = client.generate_topic_summary(lecture_text, poll_questions_text)
-                            st.session_state["summary_docx_bytes"] = build_summary_docx(summary)
-                            st.session_state["summary_text"] = summary
-                            st.session_state["summary_generated"] = True
-                            st.success("Summary generated.")
-                        except Exception as e:
-                            st.error(str(e))
+            st.subheader("Full report pipeline (LangGraph)")
+            st.caption(
+                "Human-in-the-loop: set score bands (same as Analytics), choose which outputs to run, "
+                "and homework levels / question counts. The graph runs ingest → analytics → supervisor → agents."
+            )
+            st.text_input(
+                "Score band edges (comma-separated, e.g. 0, 40, 50, 70, 80, 100)",
+                key="band_edges_str",
+                help="Defines tier bins for analytics inside the pipeline.",
+            )
+            st.text_input(
+                "Optional band labels (comma-separated, same count as intervals between edges minus one)",
+                key="band_labels_str",
+                help="Leave empty for default labels.",
+            )
+            col_pw1, col_pw2, col_pw3 = st.columns(3)
+            with col_pw1:
+                st.checkbox("Include topic summary", value=True, key="pipeline_want_summary")
+            with col_pw2:
+                st.checkbox("Include homework", value=True, key="pipeline_want_homework")
+            with col_pw3:
+                st.checkbox("Include top performer badges", value=True, key="pipeline_want_badges")
 
-            if st.session_state.get("summary_generated") and st.session_state.get("summary_docx_bytes"):
-                st.download_button(
-                    "Download summary report (.docx)",
-                    data=st.session_state["summary_docx_bytes"],
-                    file_name="class_topic_summary.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    key="dl_summary",
-                )
-
-            st.divider()
-            st.subheader("Differentiated homework (Word)")
-            if not st.session_state.get("summary_text") and st.session_state.get("lecture_text"):
-                st.caption("Tip: Generate the topic summary first so homework activities are based on your lecture content.")
-
+            st.markdown("**Homework composition** (used when homework is included in the pipeline or below)")
             st.markdown("**Generate for levels:**")
             selected_levels = st.multiselect(
                 "Choose which level(s) to generate questions for (document order is always Support → Core → Extension)",
@@ -408,6 +412,169 @@ def run_streamlit() -> None:
                 st.caption("Select at least one question type above.")
 
             extra_ctx = combine_agent_skills(load_agent_md(), load_skills_md())
+
+            if st.button("Run full report pipeline", key="btn_full_pipeline", type="primary"):
+                want_s = st.session_state.get("pipeline_want_summary", True)
+                want_h = st.session_state.get("pipeline_want_homework", True)
+                want_b = st.session_state.get("pipeline_want_badges", True)
+                if not want_s and not want_h and not want_b:
+                    st.error("Select at least one output (summary, homework, or badges).")
+                elif not ok:
+                    st.error("Start Ollama and pull a model first.")
+                elif want_h and (not selected_levels or not question_specs):
+                    st.error("For homework, select at least one level and one question type with counts.")
+                else:
+                    slide_f = _get_slide_file()
+                    excel_f = _get_excel_file()
+                    if not slide_f or not excel_f:
+                        st.error("Missing slides or Excel file.")
+                    else:
+                        try:
+                            edges, labels_arg = _session_score_bands()
+                        except ValueError as e:
+                            st.error(str(e))
+                        else:
+                            try:
+                                if hasattr(slide_f, "seek"):
+                                    slide_f.seek(0)
+                                if hasattr(excel_f, "seek"):
+                                    excel_f.seek(0)
+                                s_bytes = slide_f.getvalue()
+                                e_bytes = excel_f.getvalue()
+                            except Exception as e:
+                                st.error(f"Could not read files: {e}")
+                            else:
+                                q_from_session = _build_question_specs_from_session()
+                                levels_for_invoke = list(st.session_state.get("hw_levels") or [])
+                                with st.spinner("Running full pipeline (ingest, analytics, supervisor, agents)..."):
+                                    try:
+                                        state = invoke_classroom(
+                                            slides_bytes=s_bytes,
+                                            excel_bytes=e_bytes,
+                                            slides_filename=getattr(slide_f, "name", None) or "slides.pptx",
+                                            excel_filename=getattr(excel_f, "name", None) or "responses.xlsx",
+                                            answer_key=st.session_state.get("answer_key"),
+                                            ollama_model=st.session_state.get("ollama_model", "llama3.2"),
+                                            want_summary=want_s,
+                                            want_homework=want_h,
+                                            want_badges=want_b,
+                                            anonymize=st.session_state.get("anonymize", False),
+                                            homework_levels=levels_for_invoke if want_h else None,
+                                            question_specs=q_from_session if want_h else None,
+                                            score_band_edges=edges,
+                                            score_band_labels=labels_arg,
+                                            homework_max_attempts=int(st.session_state.get("homework_max_attempts", 4)),
+                                        )
+                                    except Exception as e:
+                                        st.error(str(e))
+                                    else:
+                                        st.session_state["pipeline_last_router_steps"] = state.get("router_steps")
+                                        st.session_state["pipeline_last_router_reason"] = state.get("router_reason")
+                                        st.session_state["pipeline_last_errors"] = list(state.get("errors") or [])
+                                        if state.get("tier_counts") is not None:
+                                            st.session_state["tier_counts"] = state["tier_counts"]
+                                        if state.get("top_performers_top5") is not None:
+                                            st.session_state["top_performers_top5"] = state["top_performers_top5"]
+                                        if state.get("summary_docx_bytes"):
+                                            st.session_state["summary_docx_bytes"] = state["summary_docx_bytes"]
+                                            st.session_state["summary_text"] = state.get("summary_text", "")
+                                            st.session_state["summary_generated"] = True
+                                        else:
+                                            st.session_state.pop("summary_generated", None)
+                                        if state.get("homework_docx_bytes"):
+                                            st.session_state["homework_docx_bytes"] = state["homework_docx_bytes"]
+                                            st.session_state["homework_text"] = state.get("homework_text", "")
+                                            st.session_state["homework_validation_note"] = state.get(
+                                                "homework_validation_note", ""
+                                            )
+                                            st.session_state["homework_generated"] = True
+                                        else:
+                                            st.session_state.pop("homework_generated", None)
+                                        if state.get("badge_pdf_bytes"):
+                                            st.session_state["badge_pdf_bytes"] = state["badge_pdf_bytes"]
+                                            st.session_state["badges_generated"] = True
+                                        else:
+                                            st.session_state.pop("badges_generated", None)
+                                        st.session_state.pop("_analytics_ready", None)
+                                        st.session_state.pop("_lecture_ready", None)
+                                        errs = state.get("errors") or []
+                                        if errs:
+                                            st.warning("Pipeline finished with messages: " + " | ".join(errs))
+                                        else:
+                                            st.success("Full report pipeline finished.")
+
+            rs = st.session_state.get("pipeline_last_router_steps")
+            rr = st.session_state.get("pipeline_last_router_reason")
+            pe = st.session_state.get("pipeline_last_errors") or []
+            if rs is not None or rr or pe:
+                with st.expander("Supervisor (router) & pipeline log", expanded=False):
+                    st.write("**router_steps:**", rs)
+                    st.write("**router_reason:**", rr or "—")
+                    if pe:
+                        st.write("**errors:**", pe)
+
+            st.markdown("**Downloads** (after pipeline or individual steps below)")
+            dl_cols = st.columns(3)
+            with dl_cols[0]:
+                if st.session_state.get("summary_docx_bytes"):
+                    st.download_button(
+                        "Download summary (.docx)",
+                        data=st.session_state["summary_docx_bytes"],
+                        file_name="class_topic_summary.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        key="dl_summary_pipe",
+                    )
+            with dl_cols[1]:
+                if st.session_state.get("homework_docx_bytes"):
+                    st.download_button(
+                        "Download homework (.docx)",
+                        data=st.session_state["homework_docx_bytes"],
+                        file_name="differentiated_homework.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        key="dl_homework_pipe",
+                    )
+            with dl_cols[2]:
+                if st.session_state.get("badge_pdf_bytes"):
+                    st.download_button(
+                        "Download badges (.pdf)",
+                        data=st.session_state["badge_pdf_bytes"],
+                        file_name="top_performer_badges.pdf",
+                        mime="application/pdf",
+                        key="dl_badges_pipe",
+                    )
+
+            st.divider()
+            st.subheader("Or run each step separately")
+            st.subheader("Topic summary (Word)")
+            if st.button("Generate summary report"):
+                if not ok:
+                    st.error("Start Ollama and pull a model first.")
+                elif not lecture_text:
+                    st.error("No text could be extracted from the slides.")
+                else:
+                    with st.spinner("Generating summary..."):
+                        try:
+                            summary = client.generate_topic_summary(lecture_text, poll_questions_text)
+                            st.session_state["summary_docx_bytes"] = build_summary_docx(summary)
+                            st.session_state["summary_text"] = summary
+                            st.session_state["summary_generated"] = True
+                            st.success("Summary generated.")
+                        except Exception as e:
+                            st.error(str(e))
+
+            if st.session_state.get("summary_generated") and st.session_state.get("summary_docx_bytes"):
+                st.download_button(
+                    "Download summary report (.docx)",
+                    data=st.session_state["summary_docx_bytes"],
+                    file_name="class_topic_summary.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    key="dl_summary",
+                )
+
+            st.divider()
+            st.subheader("Differentiated homework (Word)")
+            if not st.session_state.get("summary_text") and st.session_state.get("lecture_text"):
+                st.caption("Tip: Generate the topic summary first so homework activities are based on your lecture content.")
 
             if st.button("Generate homework"):
                 if not ok:

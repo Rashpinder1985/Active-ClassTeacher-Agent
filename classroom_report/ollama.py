@@ -11,6 +11,19 @@ from typing import Optional
 
 from classroom_report.config import OLLAMA_HOST, normalize_homework_levels
 
+# Must stay aligned with the "Homework layout (always follow)" section in agent.md at repo root.
+# Injected before full agent.md/skills.md so LangGraph / full pipeline runs always see these rules first.
+HOMEWORK_LAYOUT_AGENT_RULES = """Homework layout (always follow — from agent.md):
+
+When generating differentiated homework:
+
+1. Levels (questions): Support → Core → Extension only (omit levels the teacher turned off). The app sorts them; you do too.
+2. Inside each level: MCQs first, then fill in the blanks, then subjective — skip a block if its count is zero.
+3. Counts: Match the teacher's numbers per level (MCQ / fill-in / subjective) exactly, not "roughly."
+4. Answers: Put no correct MCQ answers next to questions. One final Answer key at the end, with subsections Support → Core → Extension.
+
+A reviewer step in code checks this; if you drift, output is rejected and regenerated."""
+
 FALLBACK_BADGE_QUOTES: tuple[str, ...] = (
     "Your effort is showing—keep that momentum going.",
     "Every step forward counts; you proved it today.",
@@ -208,6 +221,7 @@ class OllamaClient:
             "Never put MCQ correct answers inside the question sections—only in the final Answer key. "
             "Follow the exact section order and sub-structure described in the user message."
         )
+        system = system + "\n\n" + HOMEWORK_LAYOUT_AGENT_RULES
         if extra_system and extra_system.strip():
             system = system + "\n\n" + extra_system.strip()
         revision_block = ""
@@ -257,7 +271,8 @@ class OllamaClient:
         system = (
             "You are a strict QA reviewer for teacher homework. "
             "Check counts, document order, answer-key order, and that questions are clear and on-topic. "
-            "Respond with exactly two lines: line 1 PASS or FAIL; line 2 if FAIL a short reason, else OK."
+            "Respond with exactly two lines: line 1 PASS or FAIL; line 2 if FAIL a short reason, else OK.\n\n"
+            + HOMEWORK_LAYOUT_AGENT_RULES
         )
         prompt = f"""Teacher required these levels in order (before Answer key): {canonical}
 

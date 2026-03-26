@@ -1,22 +1,29 @@
-%% Classroom Report — LangGraph (classroom_report/graph.py)
+%% Classroom Report — LangGraph (classroom_report/graph.py → build_graph / invoke_classroom)
+%% Human-in-the-loop inputs are set on invoke_classroom (API/CLI/Streamlit full pipeline):
+%%   want_summary, want_homework, want_badges · score_band_edges / score_band_labels ·
+%%   homework_levels · question_specs · homework_max_attempts · anonymize · answer_key
 flowchart TB
-    files["Slides + Excel"]
-    LC["load_context — agent.md + skills.md"]
-    AN["analytics_agent — scores, charts, tiers, top 5"]
-    SV["supervisor — LLM chooses next allowed step"]
-    SM["summary_agent"]
-    HW["homework_agent + reviewer"]
-    BD["badge_agent"]
+    subgraph init["Invoke state (bytes + options)"]
+        files["Slides + Excel bytes"]
+        opts["Teacher knobs: want_* · bands · homework levels & counts · retries"]
+    end
+
+    LC["load_context — agent.md + skills.md into state"]
+    AN["analytics_agent — parse slides & Excel · run_analytics · charts · tiers · top 5"]
+    SV["supervisor — LLM picks next allowed step · router_steps / router_reason"]
+    SM["summary_agent — topic summary → Word"]
+    HW["homework_agent — generate + reviewer loop → Word"]
+    BD["badge_agent — quotes + PDF"]
     END(["END"])
 
-    files --> LC
+    init --> LC
     LC --> AN
     AN -->|ingest_ok| SV
-    AN -->|fail| END
-    SV --> SM
-    SV --> HW
-    SV --> BD
-    SV --> END
+    AN -->|not ingest_ok| END
+    SV -->|one of| SM
+    SV -->|one of| HW
+    SV -->|one of| BD
+    SV -->|no steps left / cap / end| END
     SM --> SV
     HW --> SV
     BD --> SV
