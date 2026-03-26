@@ -5,7 +5,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-from config import STUDENT_NAME_COLUMN
+from classroom_report.config import STUDENT_NAME_COLUMN
 
 
 def chart_top5(

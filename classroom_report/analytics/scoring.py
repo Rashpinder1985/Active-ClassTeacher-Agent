@@ -3,8 +3,8 @@ from typing import List, Optional, Tuple
 
 import pandas as pd
 
-from config import TIER_AVERAGE_PCT, TIER_LOW_PCT, TIER_TOP_PCT
-from parsers.responses import _find_student_name_column, _get_question_columns
+from classroom_report.config import TIER_AVERAGE_PCT, TIER_LOW_PCT, TIER_TOP_PCT
+from classroom_report.parsers.responses import _find_student_name_column, _get_question_columns
 
 
 def compute_scores(

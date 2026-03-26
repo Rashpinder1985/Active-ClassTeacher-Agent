@@ -4,7 +4,7 @@ from typing import List, Optional, Tuple
 
 import pandas as pd
 
-from config import STUDENT_NAME_COLUMN
+from classroom_report.config import STUDENT_NAME_COLUMN
 
 
 def _find_student_name_column(df: pd.DataFrame) -> str:

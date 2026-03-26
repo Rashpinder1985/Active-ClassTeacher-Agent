@@ -2,7 +2,7 @@
 import os
 from typing import Optional
 
-from config import OLLAMA_HOST
+from classroom_report.config import OLLAMA_HOST
 
 
 def get_ollama_host() -> str:
@@ -79,9 +79,16 @@ class OllamaClient:
     def available(self) -> tuple[bool, str]:
         return check_ollama_available(self.host)
 
-    def generate_topic_summary(self, lecture_text: str, poll_questions_text: str = "") -> str:
+    def generate_topic_summary(
+        self,
+        lecture_text: str,
+        poll_questions_text: str = "",
+        extra_system: Optional[str] = None,
+    ) -> str:
         """Generate 1–2 paragraph topic summary from lecture and optional poll questions."""
         system = "You are a helpful assistant that writes concise, factual summaries for teachers."
+        if extra_system and extra_system.strip():
+            system = system + "\n\n" + extra_system.strip()
         prompt = (
             "Based on the following lecture content, write a short topic summary (1–2 paragraphs) "
             "suitable for a class report. Be concise and focus on the main concepts discussed.\n\n"
@@ -98,6 +105,7 @@ class OllamaClient:
         tier_counts: dict[str, int],
         question_specs: Optional[list[dict]] = None,
         levels: Optional[list[str]] = None,
+        extra_system: Optional[str] = None,
     ) -> str:
         """
         Generate differentiated homework based on lecture/PPT content.
@@ -129,6 +137,8 @@ class OllamaClient:
             "For MCQs: give question and 4 options (A, B, C, D) only — do NOT write the correct answer next to the question. "
             "Put all MCQ correct answers in a separate 'Answer key' section at the very end of your output."
         )
+        if extra_system and extra_system.strip():
+            system = system + "\n\n" + extra_system.strip()
         prompt = (
             "Use the following lecture/topic content to generate differentiated homework.\n\n"
             "---\nLECTURE / TOPIC CONTENT\n---\n\n"

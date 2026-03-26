@@ -1,83 +1,72 @@
 # Classroom Report & Analytics
 
-A **local-only** web app for teachers: upload lecture slides (PPT or PDF) and poll responses (Excel), then generate a topic summary report, visual poll analytics (engagement + top 5 performers), and differentiated homework (Word) using a local LLM (Ollama). All data stays on your machine.
+**Repository:** [github.com/Rashpinder1985/Active-ClassTeacher-Agent](https://github.com/Rashpinder1985/Active-ClassTeacher-Agent)
+
+Local-only tool for teachers: lecture slides (PPT/PDF) + poll responses (Excel) → topic summary (Word), poll analytics (charts), and differentiated homework via **Ollama**. Stack: **LangGraph** + **FastAPI** (primary), **CLI**, optional **Streamlit**. Dependencies: **[uv](https://github.com/astral-sh/uv)** — [`pyproject.toml`](pyproject.toml) / [`uv.lock`](uv.lock) only (no `requirements.txt`).
 
 ## Prerequisites
 
-- **Python 3.9+**
-- **Ollama** ([ollama.com](https://ollama.com)) — install and run locally, then pull a model:
-  ```bash
-  ollama pull llama3.2
-  ```
+- Python **3.10+** (3.11–3.13 recommended; 3.14 may show LangChain Pydantic warnings)
+- **[uv](https://github.com/astral-sh/uv)**
+- **[Ollama](https://ollama.com)** — run locally, then e.g. `ollama pull llama3.2`
 
-## Installation
+## Install
 
-1. Open a terminal and go to the app folder:
-   ```bash
-   cd "Classroom App"
-   ```
-2. Create a virtual environment (recommended):
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate   # On Windows: venv\Scripts\activate
-   ```
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Run the app:
-   ```bash
-   streamlit run app.py
-   ```
-5. Open the URL shown (usually http://localhost:8501) in your browser.
+```bash
+cd "Classroom App"
+uv sync
+```
+
+Creates `.venv` and installs the `classroom-report` package in editable mode.
+
+## Run
+
+| Interface | Command |
+|-----------|---------|
+| **API** | `uv run uvicorn classroom_report.api.main:app --reload --host 127.0.0.1 --port 8000` |
+| **CLI** | `uv run classroom slides.pptx responses.xlsx --out-dir ./out` — add `--no-summary` / `--no-homework` to skip steps; writes `.docx` and `charts/*.json` |
+| **Streamlit** | `uv run streamlit run app.py` — UI code: [`classroom_report/streamlit_app.py`](classroom_report/streamlit_app.py) |
+
+**API:** `GET /health` — status + Ollama. `POST /graph/run` (same as `/run`, `/graph/invoke`) — multipart: `slides`, `responses`; optional form fields `answer_key`, `ollama_model`, `want_summary`, `want_homework`, `anonymize`, `homework_levels_json`, `question_specs_json`. Response: charts (Plotly JSON), `ranked_preview`, `tier_counts`, optional texts, base64 `.docx` when generated.
+
+## Project layout
+
+| Path | Purpose |
+|------|---------|
+| [`classroom_report/`](classroom_report/) | Package: parsers, analytics, llm, reports, pipeline, `agent` (LangGraph), `api` (FastAPI), `streamlit_app.py` |
+| [`app.py`](app.py), [`cli.py`](cli.py) | Streamlit shim; CLI entry |
+| [`agent.md`](agent.md), [`skills.md`](skills.md) | Agent memory + workflow text (injected into Ollama context); created with defaults if missing |
 
 ## File formats
 
-### Lecture slides (PPT or PDF)
+**Slides** — One file per lecture. Slides whose title or first line contains Poll / Question / Quiz are treated as poll context for the summary.
 
-- One file per lecture.
-- Poll questions can be on slides whose **title or first line** contains "Poll", "Question", or "Quiz" — the app uses these to improve context for the summary.
+**Excel** — Column **`Student Name`** required.
 
-### Poll responses (Excel)
+- **Selected/Correct:** `Q1_Selected`, `Q1_Correct`, … (letters A–D); score 1 when selected matches correct.
+- **Wide:** `Q1`, `Q2`, … as `1`/`0` or letters + optional answer key (comma-separated or first row “Key”/“Answer”).
 
-Two formats are supported:
+Optional samples under `templates/` (e.g. `poll_responses_example.xlsx`, `lecture_example.pptx`).
 
-**Format 1 — Selected/Correct (e.g. from polling tools)**  
-- **Required column:** `Student Name`.
-- For each question, two columns: `Qn_Selected` (answer chosen: A/B/C/D) and `Qn_Correct` (correct answer for that question).  
-  Example: `Q1_Selected`, `Q1_Correct`, `Q2_Selected`, `Q2_Correct`, …
-- The app scores 1 where Selected equals Correct, 0 otherwise.
+## Streamlit flow
 
-**Format 2 — Wide (single column per question)**  
-- **Required column:** `Student Name`.
-- **Question columns:** e.g. `Q1`, `Q2`, … with `1` = correct, `0` = incorrect, or letters A/B/C and an **answer key** (comma-separated, e.g. `A,B,A,C`).
-- **Optional:** first row can be the answer key if the first cell in the name column is "Key" or "Answer".
+Upload files → **Analytics** (top 5, engagement, tiers) → **Reports** (summary + homework `.docx`). Sidebar: Ollama model, anonymize top-5 names.
 
-See `templates/poll_responses_example.xlsx` for a wide-format example.
+## Guardrails & limits
 
-## Usage
-
-1. **Upload** — Choose your slides (PPT or PDF) and poll responses (Excel). Optionally enter correct answers (e.g. `1,1,0,1` or `A,B,A,C`).
-2. **Analytics** — View top 5 performers and per-question engagement charts. Tier counts (Extension / Core / Support) are shown.
-3. **Reports** — Click "Generate summary report" to create a topic summary (Word). Click "Generate homework" to create differentiated homework (Extension / Core / Support). Download the .docx files.
-
-## Settings (sidebar)
-
-- **Ollama model** — Model name (e.g. `llama3.2`). Must be pulled with `ollama pull <name>`.
-- **Anonymize in report** — Use "Student 1", "Student 2", … instead of names in the top-5 chart.
-
-## Guardrails
-
-- **Local only** — No data is sent to the cloud; Ollama runs on your machine.
-- **No PII in prompts** — When generating homework, only topic text and tier counts (e.g. "5 Extension, 12 Core, 4 Support") are sent to the LLM; student names are not included.
-- **File limits** — Slides: max 50 MB; Excel: max 10 MB.
-- **Disclaimer** — "Analytics and tiers are based only on poll responses; use professional judgment when assigning homework."
+- Data stays local; homework prompts use topic + tier counts only (not student names).
+- Slides max **50 MB**, Excel max **10 MB**.
+- Tiers reflect poll data only — use professional judgment for assignments.
 
 ## Troubleshooting
 
-- **"Cannot reach Ollama"** — Start Ollama (e.g. run `ollama serve` or open the Ollama app) and ensure a model is pulled (`ollama pull llama3.2`).
-- **"Excel must have a column named 'Student Name'"** — Rename your student column to exactly `Student Name` or add that column.
-- **No text from slides** — Ensure the file is a valid .pptx or .pdf with selectable text (not only images).
+- **Cannot reach Ollama** — Start Ollama and `ollama pull <model>`.
+- **Missing `Student Name` column** — Rename column to exactly that text.
+- **No slide text** — Use real `.pptx`/`.pdf` with selectable text, not image-only slides.
+
+## Tutorial
+
+Regenerate **Classroom_App_Tutorial.docx**: `uv run python scripts/generate_tutorial_doc.py`
 
 ## License
 

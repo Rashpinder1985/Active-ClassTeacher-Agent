@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "classroom-report"
+version = "0.2.0"
+description = "Classroom report analytics with LangGraph agent API and optional Streamlit UI"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "streamlit>=1.28.0",
+    "ollama>=0.3.0",
+    "python-pptx>=0.6.21",
+    "PyMuPDF>=1.23.0",
+    "pandas>=2.0.0",
+    "openpyxl>=3.1.0",
+    "python-docx>=1.1.0",
+    "plotly>=5.18.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "langgraph>=0.2.0",
+    "langchain-core>=0.3.0",
+    "python-multipart>=0.0.9",
+]
+
+[project.scripts]
+classroom = "cli:main"
+
+[tool.setuptools]
+py-modules = ["app", "cli"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["classroom_report*"]
