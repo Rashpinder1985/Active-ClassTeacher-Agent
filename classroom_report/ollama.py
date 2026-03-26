@@ -8,7 +8,7 @@ import urllib.error
 import urllib.request
 from typing import Optional
 
-from classroom_report.config import OLLAMA_HOST
+from classroom_report.config import OLLAMA_HOST, normalize_homework_levels
 
 FALLBACK_BADGE_QUOTES: tuple[str, ...] = (
     "Your effort is showing—keep that momentum going.",
@@ -107,9 +107,10 @@ class OllamaClient:
     ) -> str:
         if not (topic_summary or "").strip():
             return (
-                "Extension\n\nBased on today's class, complete 2–3 extension tasks that go beyond the lesson.\n\n"
-                "Core\n\nComplete the standard practice set based on today's topic.\n\n"
-                "Support\n\nWork through the guided practice and review the key points from class.\n\n"
+                "Support\n\n"
+                "(Placeholder — generate homework from topic text.)\n\n"
+                "Core\n\n(Placeholder.)\n\n"
+                "Extension\n\n(Placeholder.)\n\n"
                 "Answer key\n\n(MCQ answers listed here when generated.)"
             )
         specs = question_specs or [
@@ -117,7 +118,7 @@ class OllamaClient:
             {"type": "Fill in the blanks", "count": 2},
             {"type": "Subjective questions", "count": 1},
         ]
-        levels = levels or ["Extension", "Core", "Support"]
+        levels = normalize_homework_levels(levels)
         spec_text = ", ".join(f"{s['count']} {s['type']}" for s in specs)
         levels_text = ", ".join(levels)
 
@@ -131,27 +132,29 @@ class OllamaClient:
         n_fill = _count_for_type(specs, "Fill")
         n_subj = _count_for_type(specs, "Subjective")
 
-        per_section_parts: list[str] = []
+        per_level_lines: list[str] = []
         if n_mcq > 0:
-            per_section_parts.append(
-                f"at least {n_mcq} objective MCQ(s) (each with four options A, B, C, D; do not mark the correct in the question)"
+            per_level_lines.append(
+                f"   - Under **Objective (MCQ)**, list exactly {n_mcq} MCQ(s), each with four labeled options (A, B, C, D). "
+                "Do not mark the correct answer beside the question."
             )
         if n_fill > 0:
-            per_section_parts.append(f"at least {n_fill} fill-in-the-blank(s) (sentence with ____ for the blank)")
+            per_level_lines.append(
+                f"   - Under **Fill in the blanks**, list exactly {n_fill} sentence(s) with ____ for the blank."
+            )
         if n_subj > 0:
-            per_section_parts.append(f"at least {n_subj} subjective short-answer question(s).")
-        per_section_rule = (
-            "For EACH section (" + levels_text + "), include: " + "; ".join(per_section_parts)
-            if per_section_parts
-            else ""
-        )
+            per_level_lines.append(
+                f"   - Under **Subjective**, list exactly {n_subj} short-answer prompt(s)."
+            )
+        per_level_block = "\n".join(per_level_lines) if per_level_lines else "   (No question types selected.)"
 
+        ak_order = " → ".join(levels)
         system = (
             "You are a helpful assistant for teachers. You generate concrete homework activities. "
-            "Do not mention student names or performance levels. "
-            "Use only the section headings requested (Extension, Core, Support). "
-            "For MCQs: give question and 4 options (A, B, C, D) only — do NOT write the correct answer next to the question. "
-            "Put all MCQ correct answers in a separate 'Answer key' section at the very end of your output."
+            "Do not mention student names or performance tiers. "
+            "Use only the level headings requested (Support, Core, Extension). "
+            "Never put MCQ correct answers inside the question sections—only in the final Answer key. "
+            "Follow the exact section order and sub-structure described in the user message."
         )
         if extra_system and extra_system.strip():
             system = system + "\n\n" + extra_system.strip()
@@ -164,22 +167,22 @@ class OllamaClient:
             "---\nLECTURE / TOPIC CONTENT\n---\n\n"
             + topic_summary.strip()
             + "\n\n---\n"
-            "Generate ONLY these sections (in this order): " + levels_text + ".\n\n"
-            f"Target totals (for reference when planning each section): {spec_text}.\n\n"
-            "**CRITICAL:** Each section must be self-contained. Under each heading (Extension, Core, Support) that you output, "
-            "you must include every question type listed below—do not satisfy the counts only by spreading types across "
-            "different sections (e.g. all MCQs in Extension only). "
-            + per_section_rule
-            + "\n\n"
-            "Requirements:\n"
-            "- MCQ: write the question and four options (A, B, C, D). Do NOT indicate the correct answer in the question. "
-            "At the very end of your output, add a section titled exactly 'Answer key' (or 'Answer Key') and list only the correct answers for every MCQ, "
-            "e.g. 'Extension: 1. A, 2. C | Core: 1. B, 2. D | Support: 1. A' or similar so the teacher can use it for grading.\n"
-            "- Fill in the blanks: write a sentence with ____ for the blank; base the word on the lecture.\n"
-            "- Subjective questions: open-ended questions for a short paragraph or list answer.\n"
-            "Extension: slightly harder or extension-oriented. Core: standard difficulty. Support: simpler and more guided.\n\n"
-            f"Output format: put each of these headings on its own line: {levels_text}. Under each heading list the questions. "
-            "After all level sections, add the 'Answer key' section. Do not output anything before the first heading or after Answer key."
+            "### REQUIRED STRUCTURE (strict)\n\n"
+            "**Part 1 — Questions only** (do not put MCQ answers here)\n\n"
+            f"Use these main headings **in this exact order** (include only these levels): {levels_text}.\n\n"
+            "Under EACH level heading, use these **subheadings in this order** (skip a subheading if its count is 0):\n"
+            f"{per_level_block}\n\n"
+            "Difficulty: **Support** = simpler, scaffolded; **Core** = standard; **Extension** = stretch / enrichment.\n\n"
+            "**Part 2 — Answer key (must be the LAST section)**\n\n"
+            "After all level sections, add a single final section titled **Answer key** (or Answer Key).\n"
+            "Inside the answer key, use **subsections in this order** (omit levels you did not generate):\n"
+            f"{ak_order}\n\n"
+            "Under each subsection (Support, Core, Extension), give:\n"
+            "- MCQ: numbered correct letters (1. A, 2. B, …)\n"
+            "- Fill in the blanks: the word or phrase that belongs in each blank\n"
+            "- Subjective: brief bullet marking criteria or sample points (optional but helpful)\n\n"
+            f"**Counts per level** (must match exactly for each included level): {spec_text}.\n\n"
+            "Do not output anything before the first level heading. Do not add content after the Answer key section."
         )
         return prompt_ollama(prompt, model=self.model, host=self.host, system=system)
 
@@ -189,30 +192,41 @@ class OllamaClient:
         levels: list[str],
         question_specs: list[dict],
     ) -> tuple[bool, str]:
-        """LLM check that homework matches requested levels and per-type counts."""
+        """LLM check: counts, section order, answer-key order, and basic quality."""
         if not (homework_text or "").strip():
             return False, "Homework text is empty."
+        levels = normalize_homework_levels(levels)
         spec_lines = "\n".join(
-            f"- {int(s.get('count', 0))} × {s.get('type', '')}" for s in question_specs
+            f"- Exactly {int(s.get('count', 0))} × {s.get('type', '')} per included level (if count is 0, skip that type)."
+            for s in question_specs
         )
         levels_line = ", ".join(levels)
+        canonical = " → ".join(levels)
         system = (
-            "You are a strict QA reviewer for teacher homework drafts. "
-            "Be concise. Respond with exactly two lines: line 1 is PASS or FAIL; line 2 explains if FAIL, or OK if PASS."
+            "You are a strict QA reviewer for teacher homework. "
+            "Check counts, document order, answer-key order, and that questions are clear and on-topic. "
+            "Respond with exactly two lines: line 1 PASS or FAIL; line 2 if FAIL a short reason, else OK."
         )
-        prompt = f"""The teacher required these sections (headings): {levels_line}.
-Minimum items per section (per type; if a type has count 0, ignore that type):
+        prompt = f"""Teacher required these levels in order (before Answer key): {canonical}
+
+Per level, required counts (each type with count 0 is not required):
 {spec_lines}
 
-Verify the homework text below:
-- Each required section heading exists and is clearly labeled.
-- Under EACH section, each question type with count > 0 appears enough times (MCQs with A/B/C/D options; fill-ins with ____; subjective as open prompts).
-- If any MCQs exist, there must be an Answer key section at the end.
+STRUCTURE (must pass):
+- Main sections for questions appear in order: {levels_line} (Support before Core before Extension when multiple appear).
+- Under each level, question types appear in order: Objective MCQ block, then Fill in the blanks, then Subjective (or clearly labeled equivalents).
+- **Answer key** is the last section. Inside it, subsections follow: {canonical} (Support answers, then Core, then Extension).
+
+COUNTS:
+- For each level and each type with count > 0, the homework must include exactly that many items (not fewer).
+
+QUALITY:
+- MCQs have four options; fill-ins use ____; questions relate to the topic; wording is clear for students.
 
 ---
 HOMEWORK
 ---
-{homework_text[:14000]}"""
+{homework_text[:16000]}"""
         raw = prompt_ollama(prompt, model=self.model, host=self.host, system=system)
         lines = [ln.strip() for ln in raw.strip().splitlines() if ln.strip()]
         if not lines:
@@ -250,7 +264,7 @@ HOMEWORK
             {"type": "Fill in the blanks", "count": 2},
             {"type": "Subjective questions", "count": 1},
         ]
-        levels = levels or ["Extension", "Core", "Support"]
+        levels = normalize_homework_levels(levels)
         feedback: Optional[str] = None
         last_fail = ""
         for attempt in range(max_attempts):
@@ -270,7 +284,9 @@ HOMEWORK
                 "Your previous homework was rejected by an automated reviewer.\n"
                 f"Reviewer feedback: {reason}\n\n"
                 "Regenerate the COMPLETE homework from scratch. "
-                "Include every required section heading and, under each section, every required question type with the counts the teacher asked for."
+                "Follow order: Support → Core → Extension for question sections; under each level use MCQ block, then fill-ins, then subjective; "
+                "then a final Answer key with subsections Support → Core → Extension. "
+                "Match exact counts per level and type."
             )
         raise ValueError(
             f"Homework did not pass validation after {max_attempts} attempts. Last reviewer note: {last_fail}"
@@ -296,7 +312,9 @@ HOMEWORK
         )
         if extra_system and extra_system.strip():
             system = system + "\n\n" + extra_system.strip()
-        roster = "\n".join(f"{i + 1}. {names[i]} — class score {score_pcts[i]:.1f}%")
+        roster = "\n".join(
+            f"{i + 1}. {names[i]} — class score {score_pcts[i]:.1f}%" for i in range(n)
+        )
         prompt = (
             f"Write exactly {n} numbered lines. Line format: number, period, space, then the quote only.\n"
             f"Each line is a different motivational quote for one student:\n\n{roster}\n\n"

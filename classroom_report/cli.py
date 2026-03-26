@@ -20,7 +20,7 @@ def cli_main() -> None:
     p.add_argument("--no-homework", action="store_true")
     p.add_argument("--anonymize", action="store_true")
     p.add_argument("--out-dir", type=Path, default=Path("."), help="Where to write .docx outputs")
-    p.add_argument("--homework-levels", default='["Extension", "Core", "Support"]', help="JSON array of levels")
+    p.add_argument("--homework-levels", default='["Support", "Core", "Extension"]', help="JSON array of levels (ordered Support→Core→Extension)")
     p.add_argument(
         "--question-specs",
         default='[{"type": "MCQ", "count": 2}, {"type": "Fill in the blanks", "count": 2}, {"type": "Subjective questions", "count": 1}]',

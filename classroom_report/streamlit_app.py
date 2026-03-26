@@ -378,13 +378,13 @@ def run_streamlit() -> None:
 
             st.markdown("**Generate for levels:**")
             selected_levels = st.multiselect(
-                "Choose which level(s) to generate questions for",
-                options=["Extension", "Core", "Support"],
-                default=["Extension", "Core", "Support"],
+                "Choose which level(s) to generate questions for (document order is always Support → Core → Extension)",
+                options=["Support", "Core", "Extension"],
+                default=["Support", "Core", "Extension"],
                 key="hw_levels",
             )
             if not selected_levels:
-                st.caption("Select at least one level (Extension, Core, and/or Support).")
+                st.caption("Select at least one level (Support, Core, and/or Extension).")
 
             st.markdown("**Activity options** — question types and how many per selected level:")
             col1, col2, col3 = st.columns(3)
@@ -413,7 +413,7 @@ def run_streamlit() -> None:
                 if not ok:
                     st.error("Start Ollama and pull a model first.")
                 elif not selected_levels:
-                    st.error("Select at least one level (Extension, Core, and/or Support).")
+                    st.error("Select at least one level (Support, Core, and/or Extension).")
                 elif not question_specs:
                     st.error("Select at least one question type and set the number of questions.")
                 else:

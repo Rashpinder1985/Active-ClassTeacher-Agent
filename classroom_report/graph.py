@@ -18,7 +18,7 @@ from classroom_report.analytics import (
     run_analytics,
 )
 from classroom_report.badges import build_top_performer_badges_pdf
-from classroom_report.config import BADGE_TOP_N, TOP_PERFORMER_CHART_N
+from classroom_report.config import BADGE_TOP_N, TOP_PERFORMER_CHART_N, normalize_homework_levels
 from classroom_report.excel import find_student_name_column
 from classroom_report.loaders import combine_agent_skills, load_agent_md, load_skills_md
 from classroom_report.ollama import OllamaClient
@@ -171,7 +171,7 @@ def _node_homework_agent(state: ClassroomState) -> dict[str, Any]:
     client = OllamaClient(model=state.get("ollama_model") or "llama3.2")
     topic = (state.get("summary_text") or state.get("lecture_text") or "")[:6000]
     tier_counts = state.get("tier_counts") or {}
-    levels = state.get("homework_levels") or ["Extension", "Core", "Support"]
+    levels = normalize_homework_levels(state.get("homework_levels"))
     specs = state.get("question_specs") or [
         {"type": "MCQ", "count": 2},
         {"type": "Fill in the blanks", "count": 2},
@@ -277,7 +277,7 @@ def invoke_classroom(
         "want_summary": want_summary,
         "want_homework": want_homework,
         "anonymize": anonymize,
-        "homework_levels": homework_levels or ["Extension", "Core", "Support"],
+        "homework_levels": normalize_homework_levels(homework_levels),
         "question_specs": question_specs
         or [
             {"type": "MCQ", "count": 2},

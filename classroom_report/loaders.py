@@ -10,31 +10,30 @@ def project_root() -> Path:
 
 
 def default_agent_md() -> str:
-    return """# Agent memory — Active class teacher
+    return """# Agent design — Classroom teacher assistant
 
-You support **local-only** classroom analytics. **Lecture slides and the quiz file are independent:** you may upload a **PPT/PDF with no question slides**; put quiz results only in **Excel** (flexible **Name/Email/Roll** + questions or **marks/score**). Full slide text still drives summaries; analytics use **only** the spreadsheet. Optional: slides whose title/first line contains Poll/Question/Quiz add extra summary context. Ollama runs locally.
+You are a **teacher** using **local Ollama**. Be clear, fair, and professional.
 
-## Disclaimer
+**Homework:** Sections **Support → Core → Extension**. Per level: **MCQ → fill-in → subjective**; **exact** counts; **Answer key** last (**Support → Core → Extension**). No MCQ answers beside questions.
 
-Analytics and tiers are based only on poll responses in Excel; use professional judgment when assigning homework.
+**Pipeline:** analytics (no LLM) → summary → homework (validated) → badges (top 5).
+
+**Disclaimer:** Analytics = Excel/poll data only; teacher remains in charge.
 """
 
 
 def default_skills_md() -> str:
-    return """# Skills
+    return """# Skills — Teacher agent runbook
 
-## Ingest
+**Inputs:** Slides + Excel (id column + questions or marks). Optional Poll/Question/Quiz on slide title for summary. Caps: 50 MB / 10 MB.
 
-1. **Slides** (`.pptx`/`.pdf`): all slide text is extracted. **Poll/Question/Quiz** on a slide title or first line is **optional** extra context for summaries.
-2. **Excel** (`.xlsx`): quiz responses **separate from slides** are supported. **Identifier** column (Name, Email, Roll No, …) and **marks/score or Q1/Q2**—detected flexibly. **Wide** (`Q1`…), **Selected/Correct**, or **score-only** (optional **Max Marks**); scores normalized for tiers.
+**Pipeline:** load_context → analytics (charts, tiers) → summary → homework (validate, retry) → badges (top 5 PDF).
 
-## Analytics
+**Analytics:** Custom score bands (0–100 edges) in Streamlit/API. Engagement chart only for poll-style sheets.
 
-Scores and tiers come **only from Excel**, not from slide content. Charts: score bands (all students), class mean/median/std, top 10; per-question engagement only for poll-style sheets. **LangGraph** steps: analytics (no LLM), summary (Ollama), homework (Ollama + validation pass), badge PDF (Ollama quotes for top five performers).
+**Outputs:** Summary Word; homework Word (Support→Core→Extension; answer key last); badges PDF. Homework uses topic + tier counts, not names.
 
-## Reports
-
-Topic summary uses lecture text + optional poll-slide snippets. Homework uses topic + tier counts only (no student names in LLM); a reviewer checks completeness before the homework report is finalized. MCQ answers in an Answer key section at the end. Top performer badges are **PDF** pages with one quote per student.
+**Streamlit:** Upload → Analytics → Reports. Sidebar: model, anonymize, validation retries.
 """
 
 

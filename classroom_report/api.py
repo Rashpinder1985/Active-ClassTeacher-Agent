@@ -54,7 +54,7 @@ async def graph_run(
     want_summary: bool = Form(True),
     want_homework: bool = Form(True),
     anonymize: bool = Form(False),
-    homework_levels_json: str = Form('["Extension", "Core", "Support"]'),
+    homework_levels_json: str = Form('["Support", "Core", "Extension"]'),
     question_specs_json: str = Form(
         '[{"type": "MCQ", "count": 2}, {"type": "Fill in the blanks", "count": 2}, {"type": "Subjective questions", "count": 1}]'
     ),

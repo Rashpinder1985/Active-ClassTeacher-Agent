@@ -109,3 +109,24 @@ MAX_MARKS_COLUMN_NAMES = (
 )
 
 TIER_LABELS = {"top": "Extension", "average": "Core", "low": "Support"}
+
+# Homework document order: Support → Core → Extension, then Answer key (Support → Core → Extension within key).
+HOMEWORK_LEVEL_ORDER: tuple[str, ...] = ("Support", "Core", "Extension")
+
+
+def normalize_homework_levels(levels: list[str] | None) -> list[str]:
+    """Return selected levels in canonical order: Support, Core, Extension."""
+    if not levels:
+        return list(HOMEWORK_LEVEL_ORDER)
+    mapping = {"support": "Support", "core": "Core", "extension": "Extension"}
+    seen: list[str] = []
+    for raw in levels:
+        key = str(raw).strip().lower()
+        if key in mapping:
+            c = mapping[key]
+            if c not in seen:
+                seen.append(c)
+    if not seen:
+        return list(HOMEWORK_LEVEL_ORDER)
+    idx = {name: i for i, name in enumerate(HOMEWORK_LEVEL_ORDER)}
+    return sorted(seen, key=lambda x: idx[x])
